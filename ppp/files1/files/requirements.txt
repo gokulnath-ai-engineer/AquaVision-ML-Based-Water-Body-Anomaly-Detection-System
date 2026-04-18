@@ -1,0 +1,52 @@
+# -------------------------------------------------
+# Aqua-Sentinel AI
+# Hierarchical Geo-Intelligent Framework for
+# Real-Time Multi-Spectral Water Quality Monitoring
+# -------------------------------------------------
+
+# Core scientific computing
+numpy>=1.24.0
+scipy>=1.11.0
+pandas>=2.0.0
+
+# Geospatial
+rasterio>=1.3.9
+pyproj>=3.6.0
+shapely>=2.0.0
+geopandas>=0.14.0
+
+# Image processing
+opencv-python>=4.8.0
+Pillow>=10.0.0
+
+# Deep learning / object detection
+ultralytics>=8.0.200        # YOLOv8 + training utilities
+torch>=2.0.0                # auto-installed by ultralytics
+torchvision>=0.15.0
+
+# Dashboard (Streamlit frontend)
+streamlit>=1.28.0
+folium>=0.15.0
+streamlit-folium>=0.15.0
+
+# Web server (FastAPI frontend)
+fastapi>=0.104.0
+uvicorn>=0.24.0
+
+# PDF report generation
+fpdf2>=2.7.0
+
+# Utilities
+PyYAML>=6.0
+tqdm>=4.66.0
+
+# Visualisation
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Optional -- uncomment for production GEE mode
+# earthengine-api>=0.1.370
+# roboflow>=1.1.0
+
+# Optional -- Sentinel Hub direct API
+# sentinelhub>=3.9.0

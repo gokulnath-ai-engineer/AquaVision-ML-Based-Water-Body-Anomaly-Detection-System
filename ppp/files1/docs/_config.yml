@@ -1,0 +1,37 @@
+title: Aqua-Sentinel AI
+description: Hierarchical Geo-Intelligent Framework for Water Quality Monitoring
+baseurl: /aqua
+url: https://surendra-01-yadav.github.io
+
+# GitHub settings
+repository: surendra-01-yadav/aqua
+github_user: surendra-01-yadav
+
+# Theme
+theme: jekyll-theme-minimal
+remote_theme: pages-themes/minimal@v0.2.0
+
+# Plugins
+plugins:
+  - jekyll-feed
+  - jekyll-seo-tag
+  - jekyll-sitemap
+
+# Navigation
+nav:
+  - Home
+  - Installation
+  - Quick Start
+  - Modules
+  - Configuration
+  - FAQ
+  - GitHub
+
+# Build settings
+markdown: kramdown
+permalink: /:categories/:title/
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - README.md
+  - docs/_site

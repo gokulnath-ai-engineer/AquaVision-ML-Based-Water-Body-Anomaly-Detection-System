@@ -1,0 +1,242 @@
+/* Aqua-Sentinel AI Documentation Styles */
+
+:root {
+  --primary-color: #0066cc;
+  --secondary-color: #00ccff;
+  --accent-color: #00ff99;
+  --dark-bg: #0a0e27;
+  --light-bg: #f5f7fa;
+  --text-dark: #1a1a1a;
+  --text-light: #555;
+  --border-color: #e0e0e0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  line-height: 1.6;
+  color: var(--text-dark);
+  background-color: var(--light-bg);
+}
+
+header {
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  color: white;
+  padding: 2rem;
+  border-radius: 0 0 1rem 1rem;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--primary-color);
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+h1 {
+  font-size: 2.5rem;
+  color: white;
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  padding: 1rem;
+  border-radius: 0.5rem;
+}
+
+h2 {
+  font-size: 1.8rem;
+  border-bottom: 3px solid var(--secondary-color);
+  padding-bottom: 0.5rem;
+}
+
+code {
+  background-color: #f4f4f4;
+  padding: 0.2em 0.4em;
+  border-radius: 0.3em;
+  font-family: 'Courier New', monospace;
+  color: #d73a49;
+}
+
+pre {
+  background-color: #1e1e1e;
+  color: #e0e0e0;
+  padding: 1.5rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  border-left: 4px solid var(--secondary-color);
+}
+
+pre code {
+  color: #e0e0e0;
+  background: none;
+  padding: 0;
+}
+
+a {
+  color: var(--primary-color);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+a:hover {
+  color: var(--secondary-color);
+  text-decoration: underline;
+}
+
+.button {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  background-color: var(--primary-color);
+  color: white;
+  border-radius: 0.5rem;
+  margin: 0.5rem;
+  transition: background-color 0.2s;
+}
+
+.button:hover {
+  background-color: var(--secondary-color);
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1rem 0;
+}
+
+table th {
+  background-color: var(--primary-color);
+  color: white;
+  padding: 0.75rem;
+  text-align: left;
+}
+
+table td {
+  border: 1px solid var(--border-color);
+  padding: 0.75rem;
+}
+
+table tr:nth-child(even) {
+  background-color: var(--light-bg);
+}
+
+blockquote {
+  border-left: 4px solid var(--secondary-color);
+  padding-left: 1rem;
+  margin-left: 0;
+  color: var(--text-light);
+  font-style: italic;
+}
+
+.alert {
+  padding: 1rem;
+  margin: 1rem 0;
+  border-radius: 0.5rem;
+  border-left: 4px solid;
+}
+
+.alert-info {
+  background-color: #e3f2fd;
+  border-color: #0066cc;
+  color: #0066cc;
+}
+
+.alert-success {
+  background-color: #e8f5e9;
+  border-color: #00cc00;
+  color: #00cc00;
+}
+
+.alert-warning {
+  background-color: #fff3e0;
+  border-color: #ff9800;
+  color: #ff9800;
+}
+
+.alert-danger {
+  background-color: #ffebee;
+  border-color: #f44336;
+  color: #f44336;
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 2rem;
+  margin: 2rem 0;
+}
+
+.feature-card {
+  padding: 1.5rem;
+  border-radius: 0.5rem;
+  background: white;
+  border: 2px solid var(--border-color);
+  transition: all 0.3s;
+}
+
+.feature-card:hover {
+  border-color: var(--secondary-color);
+  box-shadow: 0 4px 12px rgba(0, 102, 204, 0.1);
+}
+
+.feature-card h3 {
+  margin-top: 0;
+}
+
+.sidebar {
+  position: sticky;
+  top: 1rem;
+  padding: 1.5rem;
+  background: white;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+}
+
+.sidebar h3 {
+  margin-top: 0;
+}
+
+.sidebar ul {
+  list-style: none;
+  padding: 0;
+}
+
+.sidebar li {
+  margin: 0.5rem 0;
+}
+
+.sidebar a {
+  display: block;
+  padding: 0.5rem;
+  border-left: 3px solid transparent;
+  transition: all 0.2s;
+}
+
+.sidebar a:hover {
+  border-left-color: var(--secondary-color);
+  padding-left: 0.75rem;
+}
+
+footer {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-light);
+  border-top: 1px solid var(--border-color);
+  margin-top: 3rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  h1 {
+    font-size: 1.8rem;
+  }
+  
+  h2 {
+    font-size: 1.4rem;
+  }
+  
+  .feature-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Code highlighting */
+.highlight {
+  background-color: #f4f4f4;
+}
