@@ -111,7 +111,43 @@ def run_module_5():
     if forensic_path.exists():
         print("  [*] Forensic results found -- generating PDF incident report ...")
         from pdf_report import generate_incident_report
-        generate_incident_report()
+        detections = []
+        csv_path = Path("reports/detections.csv")
+        if csv_path.exists():
+            import csv
+            with open(csv_path, newline="") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    detections.append({
+                        "chip": row.get("chip"),
+                        "confidence": float(row.get("confidence", 0.0) or 0.0),
+                        "class": row.get("class"),
+                        "anomaly_type": row.get("anomaly_type"),
+                        "bbox_px": row.get("bbox_px"),
+                        "centre_lat": float(row["centre_lat"]) if row.get("centre_lat") not in (None, "") else None,
+                        "centre_lon": float(row["centre_lon"]) if row.get("centre_lon") not in (None, "") else None,
+                        "timestamp": row.get("timestamp"),
+                        "location_name": row.get("location_name"),
+                    })
+
+        forensic_analyses = []
+        try:
+            import json
+            with open(forensic_path, "r", encoding="utf-8") as f:
+                forensic_data = json.load(f)
+            if isinstance(forensic_data, dict):
+                forensic_analyses = forensic_data.get("analyses", [])
+            elif isinstance(forensic_data, list):
+                forensic_analyses = forensic_data
+        except Exception as exc:
+            print(f"  [WARN] Could not load forensic analysis data: {exc}")
+
+        generate_incident_report(
+            detections=detections,
+            forensic_analyses=forensic_analyses,
+            roi_info=ROI,
+            output_path="reports/incident_report.pdf",
+        )
     else:
         print("  [!] No forensic results at reports/forensic_analysis.json -- skipping PDF report.")
 

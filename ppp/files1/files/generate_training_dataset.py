@@ -362,20 +362,65 @@ def mask_to_yolo_labels_multiclass(
 def split_tiles(tile_names: list[str], ratios: dict) -> dict[str, list[str]]:
     """
     Split tile names into train/valid/test sets.
+
+    The dataset may be small in demo mode, so we enforce non-empty validation
+    data when possible to avoid Ultralytics failing on an empty val directory.
     """
     random.seed(42)
     shuffled = tile_names.copy()
     random.shuffle(shuffled)
 
     n = len(shuffled)
-    n_train = int(n * ratios["train"])
-    n_val   = int(n * ratios["val"])
+    if n == 0:
+        return {"train": [], "valid": [], "test": []}
+
+    # Compute target counts from configured ratios, but guarantee at least one
+    # sample in each non-empty split when the dataset is large enough.
+    n_train = max(1, int(round(n * ratios["train"])))
+    n_val = max(1, int(round(n * ratios["val"])))
+    n_test = n - n_train - n_val
+
+    if n >= 3 and n_test <= 0:
+        # Keep validation non-empty and shrink training to preserve a test split
+        # only if there are enough samples left after reserving val.
+        n_val = max(1, min(n - 2, n_val))
+        n_train = max(1, n - n_val - 1)
+        n_test = n - n_train - n_val
+
+    if n >= 2 and n_train + n_val > n:
+        n_train = max(1, n - n_val)
+
+    if n >= 2 and n_val > n - 1:
+        n_val = n - 1
+        n_train = 1
+
+    # If the dataset is tiny, allow fewer splits to exist.
+    if n == 1:
+        return {"train": shuffled[:1], "valid": [], "test": []}
+    if n == 2:
+        return {"train": shuffled[:1], "valid": shuffled[1:], "test": []}
+
+    n_train = min(n_train, n - 1)
+    n_val = min(max(1, n_val), n - n_train)
+    n_test = n - n_train - n_val
+
+    if n_test < 0:
+        n_test = 0
 
     splits = {
         "train": shuffled[:n_train],
         "valid": shuffled[n_train:n_train + n_val],
-        "test":  shuffled[n_train + n_val:],
+        "test": shuffled[n_train + n_val:n_train + n_val + n_test],
     }
+
+    # Final safety: if validation is empty on a small but non-trivial set, move one
+    # item from training into validation while preserving at least one training item.
+    if not splits["valid"] and len(shuffled) >= 2:
+        splits["valid"] = [shuffled[-1]]
+        splits["train"] = shuffled[:-1]
+        if not splits["train"]:
+            splits["train"] = [shuffled[0]]
+            splits["valid"] = [shuffled[1]]
 
     return splits
 

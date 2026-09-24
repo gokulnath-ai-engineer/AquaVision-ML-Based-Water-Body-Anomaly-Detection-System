@@ -1,0 +1,26 @@
+venv/
+__pycache__/
+*.py[cod]
+*.cache
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# Local runtime and generated outputs
+logs/
+runs/
+reports/
+data/inference_output/
+data/processed_heatmaps/
+data/raw_geotiff/
+data/spectral_analysis/
+data/synthetic_ground_truth/
+ppp/files1/files/data/
+ppp/files1/files/static/
+
+# Local editor settings
+.vscode/
+
+# Large model weights are downloaded/generated locally
+*.pt
+*.onnx

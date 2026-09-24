@@ -1,9 +1,9 @@
 ---
 layout: default
-title: Aqua-Sentinel AI
+title: Aqua-Sentinel AI- Bharath Water Monitor
 ---
 
-# 🌊 Aqua-Sentinel AI
+# 🌊 Aqua-Sentinel AI- Bharath Water Monitor
 
 **Hierarchical Geo-Intelligent Framework for Real-Time Multi-Spectral Water Quality Monitoring & Forensic Anomaly Reporting**
 

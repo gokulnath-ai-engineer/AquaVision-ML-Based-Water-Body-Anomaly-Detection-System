@@ -128,6 +128,23 @@ def detect_device() -> str:
         return "cpu"
 
 
+def resolve_best_weights_path() -> Path:
+    """Resolve the actual YOLO weights path across Ultralytics project layouts."""
+    candidates = [
+        Path(TRAIN["project_dir"]) / TRAIN["run_name"] / "weights" / "best.pt",
+        Path(TRAIN["project_dir"]) / "detect" / TRAIN["run_name"] / "weights" / "best.pt",
+        Path(TRAIN["project_dir"]) / "detect" / "runs" / TRAIN["run_name"] / "weights" / "best.pt",
+        Path(TRAIN["project_dir"]) / "runs" / TRAIN["run_name"] / "weights" / "best.pt",
+    ]
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    # Fallback to the most common current layout.
+    return Path(TRAIN["project_dir"]) / "detect" / "runs" / TRAIN["run_name"] / "weights" / "best.pt"
+
+
 # ──────────────────────────────────────────────
 # 4. Training
 # ──────────────────────────────────────────────
@@ -238,7 +255,7 @@ def validate(data_yaml: Path, device: str = None) -> None:
     if device is None:
         device = detect_device()
 
-    weights = Path(TRAIN["project_dir"]) / TRAIN["run_name"] / "weights" / "best.pt"
+    weights = resolve_best_weights_path()
     if not weights.exists():
         print(f"[WARN] Best weights not found at {weights}. Skipping validation.")
         return
@@ -344,7 +361,7 @@ def main() -> None:
     # Step 4 — Validate
     validate(data_yaml, device=device)
 
-    weights_path = Path(TRAIN["project_dir"]) / TRAIN["run_name"] / "weights" / "best.pt"
+    weights_path = resolve_best_weights_path()
     print(f"\n[DONE] Best weights saved -> {weights_path}")
     print("       Next -> run module4_inference.py to detect water quality anomalies.")
 

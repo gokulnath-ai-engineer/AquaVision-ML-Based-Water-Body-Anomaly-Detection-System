@@ -48,7 +48,7 @@ from dashboard_utils import (
 # Page config
 # ──────────────────────────────────────────────
 st.set_page_config(
-    page_title="Aqua-Sentinel AI",
+    page_title="Aqua-Sentinel AI- Bharath Water Monitor",
     page_icon="🌊",
     layout="wide",
     initial_sidebar_state="expanded",

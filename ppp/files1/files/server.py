@@ -27,7 +27,9 @@ API Endpoints:
 """
 
 import csv
+import hashlib
 import json
+import os
 import shutil
 import threading
 import traceback
@@ -37,12 +39,15 @@ from typing import Optional
 
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import config
 from config import INFER, PREPROCESS, DASHBOARD, RIVER_ONLY_MODE
+
+APP_ROOT = Path(__file__).resolve().parent
+os.chdir(APP_ROOT)
 
 ROI = config.ROI
 
@@ -59,18 +64,20 @@ pipeline_status = {
 # App setup
 # ──────────────────────────────────────────────
 app = FastAPI(
-    title="Aqua-Sentinel AI",
+    title="Aqua-Sentinel AI- Bharath Water Monitor",
     description="Hierarchical Geo-Intelligent Framework for Real-Time Multi-Spectral Water Quality Monitoring",
     version="3.0",
 )
 
-# Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
+STATIC_DIR = APP_ROOT / "static"
 
-if Path("static/css").exists():
-    app.mount("/css", StaticFiles(directory="static/css"), name="css")
-if Path("static/js").exists():
-    app.mount("/js", StaticFiles(directory="static/js"), name="js")
+# Mount static files
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+if (STATIC_DIR / "css").exists():
+    app.mount("/css", StaticFiles(directory=str(STATIC_DIR / "css")), name="css")
+if (STATIC_DIR / "js").exists():
+    app.mount("/js", StaticFiles(directory=str(STATIC_DIR / "js")), name="js")
 
 # Paths
 REPORT_CSV     = Path(INFER["report_csv"])
@@ -79,6 +86,102 @@ HEATMAP_DIR    = Path(PREPROCESS["processed_dir"])
 TILES_DIR      = HEATMAP_DIR / "tiles"
 MASKS_DIR      = HEATMAP_DIR / "masks"
 DETECT_DIR     = Path(INFER["output_dir"])
+
+
+def _normalize_fingerprint(value) -> str:
+    if isinstance(value, dict):
+        serialized = json.dumps(value, sort_keys=True, separators=(",", ":"))
+    else:
+        serialized = str(value or "")
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _get_allowed_fingerprint() -> Optional[str]:
+    fp_file = Path(config.APP_ACCESS.get("fingerprint_file", "data/authorized_fingerprint.json"))
+    if fp_file.exists():
+        try:
+            payload = json.loads(fp_file.read_text(encoding="utf-8"))
+            return payload.get("fingerprint")
+        except Exception:
+            return None
+    return config.APP_ACCESS.get("allowed_fingerprint")
+
+
+def _save_allowed_fingerprint(fingerprint: str):
+    fp_file = Path(config.APP_ACCESS.get("fingerprint_file", "data/authorized_fingerprint.json"))
+    fp_file.parent.mkdir(parents=True, exist_ok=True)
+    fp_file.write_text(json.dumps({"fingerprint": fingerprint}, indent=2), encoding="utf-8")
+    config.APP_ACCESS["allowed_fingerprint"] = fingerprint
+
+
+def _is_authorized(request: Request) -> bool:
+    if not config.APP_ACCESS.get("enabled", True):
+        return True
+    cookie_name = config.APP_ACCESS.get("session_cookie", "aquavision_user")
+    cookie_value = request.cookies.get(cookie_name)
+    if cookie_value != "authorized":
+        return False
+    allowed = _get_allowed_fingerprint()
+    if not allowed:
+        return True
+    request_fingerprint = request.cookies.get("aquavision_fp")
+    if not request_fingerprint:
+        return False
+    return request_fingerprint == allowed
+
+
+@app.middleware("http")
+async def enforce_single_person_access(request: Request, call_next):
+    # Allow the dashboard root and login-related static pages without auth
+    public_paths = ["/", "/login", "/api/auth/login", "/static/login.html", "/favicon.ico"]
+    if request.url.path.startswith("/static/") or request.url.path.startswith("/css/") or request.url.path.startswith("/js/"):
+        return await call_next(request)
+    if request.url.path in public_paths:
+        return await call_next(request)
+    if not config.APP_ACCESS.get("enabled", True):
+        return await call_next(request)
+    if _is_authorized(request):
+        return await call_next(request)
+    return RedirectResponse(url="/login", status_code=307)
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def serve_login_page():
+    login_path = STATIC_DIR / "login.html"
+    if not login_path.exists():
+        return HTMLResponse("<h1>Access required</h1><p>Please create static/login.html.</p>", status_code=200)
+    return HTMLResponse(content=login_path.read_text(encoding="utf-8"))
+
+
+@app.post("/api/auth/login")
+async def login(request: Request):
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+
+    username = str(payload.get("username", "")).strip()
+    password = str(payload.get("password", "")).strip()
+    fingerprint_payload = payload.get("fingerprint") or {}
+    fingerprint_hash = _normalize_fingerprint(fingerprint_payload)
+
+    expected_user = config.APP_ACCESS.get("username", "admin")
+    expected_password = config.APP_ACCESS.get("password", "AquaVision@123")
+
+    if username != expected_user or password != expected_password:
+        return JSONResponse({"ok": False, "message": "Invalid username or password."}, status_code=401)
+
+    allowed_fingerprint = _get_allowed_fingerprint()
+    if allowed_fingerprint and fingerprint_hash != allowed_fingerprint:
+        return JSONResponse({"ok": False, "message": "This browser fingerprint is not authorized to open the application."}, status_code=403)
+
+    if not allowed_fingerprint:
+        _save_allowed_fingerprint(fingerprint_hash)
+
+    response = JSONResponse({"ok": True, "message": "Access granted."})
+    response.set_cookie(config.APP_ACCESS.get("session_cookie", "aquavision_user"), "authorized", httponly=True, samesite="lax")
+    response.set_cookie("aquavision_fp", fingerprint_hash, httponly=True, samesite="lax")
+    return response
 
 
 # ──────────────────────────────────────────────
@@ -138,8 +241,11 @@ def compute_stats(detections: list[dict]) -> dict:
 # ──────────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)
-async def serve_dashboard():
-    html_path = Path("static/index.html")
+async def serve_dashboard(request: Request):
+    # Serve dashboard without requiring authorization (allow direct access)
+    html_path = STATIC_DIR / "index.html"
+    if not html_path.exists():
+        return HTMLResponse("<h1>Aqua-Sentinel AI- Bharath Water Monitor</h1><p>Access granted. The dashboard is ready.</p>", status_code=200)
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 
@@ -504,7 +610,20 @@ def _run_pipeline_worker(roi_dict: dict):
             try:
                 import pdf_report
                 importlib.reload(pdf_report)
-                pdf_report.generate_incident_report()
+                detections = load_detections()
+                with open(forensic_path, "r", encoding="utf-8") as _f:
+                    forensic_data = json.load(_f)
+                forensic_analyses = (
+                    forensic_data.get("analyses", [])
+                    if isinstance(forensic_data, dict)
+                    else forensic_data
+                )
+                pdf_report.generate_incident_report(
+                    detections=detections,
+                    forensic_analyses=forensic_analyses,
+                    roi_info=config.ROI,
+                    output_path=INFER["report_pdf"],
+                )
             except Exception as pdf_err:
                 print(f"  [!] PDF generation skipped: {pdf_err}")
 

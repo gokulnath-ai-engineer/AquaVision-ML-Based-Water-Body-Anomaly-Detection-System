@@ -1,0 +1,11 @@
+names:
+- thermal_plume
+- algal_bloom
+- turbidity_spike
+- oil_slick
+- sewage_discharge
+nc: 5
+path: C:\College Projects\AquaVision-ML-Based-Water-Body-Anomaly-Detection-System\data\dataset
+test: test/images
+train: train/images
+val: valid/images

@@ -249,18 +249,23 @@ def tile_image(
     overlap:    int,
 ) -> list[dict]:
     """
-    Slice colour_img and mask_img into (tile_size × tile_size) chips.
+    Slice colour_img and mask_img into chips sized to the image dimensions
+    when the image is smaller than the configured tile size.
     Returns list of metadata dicts (one per chip).
     """
     H, W = colour_img.shape[:2]
-    stride   = tile_size - overlap
+    effective_tile_size = min(tile_size, H, W)
+    if effective_tile_size < tile_size:
+        print(f"  [INFO] Image smaller than configured tile size ({H}x{W}px -> using {effective_tile_size}px chips)")
+
+    stride = max(1, effective_tile_size - overlap)
     metadata = []
     tile_idx = 0
 
-    for r in range(0, H - tile_size + 1, stride):
-        for c in range(0, W - tile_size + 1, stride):
-            chip   = colour_img[r:r + tile_size, c:c + tile_size]
-            m_chip = mask_img[r:r + tile_size, c:c + tile_size]
+    for r in range(0, H - effective_tile_size + 1, stride):
+        for c in range(0, W - effective_tile_size + 1, stride):
+            chip   = colour_img[r:r + effective_tile_size, c:c + effective_tile_size]
+            m_chip = mask_img[r:r + effective_tile_size, c:c + effective_tile_size]
 
             chip_name = f"{stem}_tile{tile_idx:04d}"
 
@@ -272,13 +277,14 @@ def tile_image(
 
             # Compute corner coordinates for this chip
             lat_tl, lon_tl = pixel_to_latlon(r,             c,             transform)
-            lat_br, lon_br = pixel_to_latlon(r + tile_size, c + tile_size, transform)
+            lat_br, lon_br = pixel_to_latlon(r + effective_tile_size, c + effective_tile_size, transform)
 
             meta = {
                 "chip_name": chip_name,
                 "source":    stem,
                 "row_start": r,
                 "col_start": c,
+                "tile_size": effective_tile_size,
                 "bbox_latlon": {
                     "top_left":     {"lat": lat_tl, "lon": lon_tl},
                     "bottom_right": {"lat": lat_br, "lon": lon_br},
@@ -287,6 +293,30 @@ def tile_image(
             }
             metadata.append(meta)
             tile_idx += 1
+
+    # If the image is smaller than the tilesize, the loops above do not execute.
+    # Add one full-frame chip in that case so the pipeline still produces data.
+    if not metadata and (H > 0 and W > 0):
+        chip = colour_img[:effective_tile_size, :effective_tile_size]
+        m_chip = mask_img[:effective_tile_size, :effective_tile_size]
+        chip_name = f"{stem}_tile{tile_idx:04d}"
+        cv2.imwrite(str(TILES_DIR / f"{chip_name}.png"), chip)
+        cv2.imwrite(str(MASKS_DIR / f"{chip_name}_mask.png"), m_chip)
+
+        lat_tl, lon_tl = pixel_to_latlon(0, 0, transform)
+        lat_br, lon_br = pixel_to_latlon(effective_tile_size, effective_tile_size, transform)
+        metadata.append({
+            "chip_name": chip_name,
+            "source": stem,
+            "row_start": 0,
+            "col_start": 0,
+            "tile_size": effective_tile_size,
+            "bbox_latlon": {
+                "top_left": {"lat": lat_tl, "lon": lon_tl},
+                "bottom_right": {"lat": lat_br, "lon": lon_br},
+            },
+            "anomaly_pixels": int(np.sum(m_chip > 0)),
+        })
 
     return metadata
 

@@ -46,6 +46,20 @@ ROI = {
 }
 
 # -----------------------------------------------------
+# 1b. SINGLE-USER ACCESS CONTROL
+#     First successful login stores the approved browser fingerprint.
+#     Only that one fingerprint can open the application afterwards.
+# -----------------------------------------------------
+APP_ACCESS = {
+    "enabled": True,
+    "username": "admin",
+    "password": "AquaVision@123",
+    "allowed_fingerprint": None,
+    "session_cookie": "aquavision_user",
+    "fingerprint_file": "data/authorized_fingerprint.json",
+}
+
+# -----------------------------------------------------
 # 2. GOOGLE EARTH ENGINE -- Landsat 8/9 TIRS
 # -----------------------------------------------------
 GEE = {
@@ -260,7 +274,7 @@ TRAIN = {
 # 10. INFERENCE & REPORTING
 # -----------------------------------------------------
 INFER = {
-    "best_weights":   "runs/aqua_sentinel_v1/weights/best.pt",
+    "best_weights":   "runs/detect/runs/punjab_water_bodies_v1/weights/best.pt",
     "input_dir":      "data/inference_input",
     "output_dir":     "data/inference_output",
     "conf_thres":     0.10,
@@ -282,7 +296,7 @@ INFER = {
 # 11. DASHBOARD
 # -----------------------------------------------------
 DASHBOARD = {
-    "title":     "Aqua-Sentinel AI — Punjab Water Monitor",
+    "title":     "Aqua-Sentinel AI- Bharath Water Monitor",
     "subtitle":  "AI-Powered Water Body Anomaly Detection — All 33 Punjab Cities | Rivers, Lakes & Wetlands",
     "port":      8000,
     "state":     "Punjab",             # Locked to Punjab

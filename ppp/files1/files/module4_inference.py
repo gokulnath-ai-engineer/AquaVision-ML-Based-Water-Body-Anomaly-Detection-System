@@ -239,7 +239,7 @@ def generate_html_report(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aqua-Sentinel AI — River Anomaly Detection Report — {water_body}</title>
+    <title>Aqua-Sentinel AI- Bharath Water Monitor — River Anomaly Detection Report — {water_body}</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
@@ -415,7 +415,7 @@ def generate_html_report(
 <body>
     <div class="container">
         <div class="header">
-            <h1>Aqua-Sentinel AI — River Anomaly Detection Report</h1>
+            <h1>Aqua-Sentinel AI- Bharath Water Monitor — River Anomaly Detection Report</h1>
             <p>Satellite-Based Multi-Spectral Water Quality Monitoring & Forensic Analysis</p>
             <p style="margin-top: 0.5rem; color: #ccc; font-size: 1.2rem;"><strong>{water_body}, {city}, {state}</strong></p>
             <span class="river-badge">RIVER-ONLY DETECTION MODE</span>
@@ -691,7 +691,13 @@ def run_inference(use_tiles: bool = False) -> None:
         print("[ERROR] Ultralytics not installed.  pip install ultralytics")
         return
 
-    weights = Path(INFER["best_weights"])
+    candidate_paths = [
+        Path(INFER["best_weights"]),
+        Path("runs") / "punjab_water_bodies_v1" / "weights" / "best.pt",
+        Path("runs") / "detect" / "runs" / "punjab_water_bodies_v1" / "weights" / "best.pt",
+        Path("runs") / "detect" / "punjab_water_bodies_v1" / "weights" / "best.pt",
+    ]
+    weights = next((p for p in candidate_paths if p.exists()), candidate_paths[0])
     if not weights.exists():
         print(f"[ERROR] Weights not found: {weights}")
         print("        Run Module 3 first to train the model.")

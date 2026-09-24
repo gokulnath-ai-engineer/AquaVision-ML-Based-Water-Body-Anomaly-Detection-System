@@ -146,7 +146,10 @@ def _safe_text(text) -> str:
     """Ensure text is a string suitable for PDF rendering."""
     if text is None:
         return "N/A"
-    return str(text)
+    value = str(text)
+    # FPDF's built-in fonts do not support all Unicode punctuation.
+    # Replace em/en dashes with plain ASCII hyphen to keep PDF generation stable.
+    return value.replace("—", "-").replace("–", "-")
 
 
 def _check_page_space(pdf: FPDF, needed_mm: float) -> None:
@@ -301,8 +304,8 @@ def _add_cover_page(pdf: AquaSentinelPDF, roi_info: dict) -> None:
     pdf.set_font("Courier", "", 7)
     pdf.set_text_color(80, 100, 120)
     pdf.cell(0, 4, f"Report ID: AQSI-{now.strftime('%Y%m%d%H%M%S')}  |  "
-             f"System: {DASHBOARD.get('title', 'Aqua-Sentinel AI')}  |  "
-             f"{DASHBOARD.get('subtitle', '')}",
+             f"System: {_safe_text(DASHBOARD.get('title', 'Aqua-Sentinel AI'))}  |  "
+             f"{_safe_text(DASHBOARD.get('subtitle', ''))}",
              align="C", new_x="LMARGIN", new_y="NEXT")
 
     pdf._skip_footer = False
