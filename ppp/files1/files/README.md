@@ -226,11 +226,42 @@ python server.py
 | GET | `/api/forensic` | Forensic analysis results |
 | GET | `/api/pdf-report` | Download PDF incident report |
 | GET | `/api/geo/states` | List of Indian states |
+| GET | `/api/geo/districts?state=Punjab` | Official BharatMap districts; omit state for all India |
 | GET | `/api/geo/cities/{state}` | Cities in a state |
 | GET | `/api/geo/water-bodies/{state}/{city}` | Water bodies near a city |
 | GET | `/api/geo/roi/{state}/{city}/{name}` | ROI config for a water body |
 | GET | `/api/heatmaps` | Heatmap image list |
 | GET | `/api/detection-images` | Detection image list |
+| GET | `/api/measurements?state=Punjab&district=Ludhiana&parameter=pH` | Filter stored surface-water measurements |
+| GET | `/api/measurements/collector-status` | Automatic collection status and stored record count |
+| POST | `/api/measurements/collect?state=Punjab` | Immediately download current CPCB/NWDP CSVs (omit state for India-wide collection) |
+| POST | `/api/measurements/import` | Import 1-1000 CPCB/NWDP observation records as JSON |
+
+### India-wide geography and measurements
+
+The state/UT list comes from the project's India geography database. District names are looked up from the Government of India's [BharatMap district service](https://mapservice.gov.in/gismapservice/rest/services/BharatMapService/Admin_Boundary_District/MapServer/1), cached for one day, and can be refreshed with `?refresh=true`.
+
+Water quality measurements are real CPCB observations published through the [National Water Data Portal](https://www.nwdp.nwic.gov.in/dataset/surface-water-quality-manual-chemical-parameters-cpcb). At server startup, a background collector discovers state and union territory CSV resources and imports recognizable station-level measurements. It repeats every 24 hours. To collect on demand, call `POST /api/measurements/collect`; optionally pass `?state=Punjab`. The application stores imported records in `data/india_water_quality.sqlite3`; empty locations have no fabricated readings. Check `/api/measurements/collector-status` for progress and errors. NWDP currently publishes manual sampling datasets in period-based CSV resources, so update frequency depends on CPCB/NWDP publication rather than live sensors.
+
+```json
+{
+  "items": [
+    {
+      "state": "Punjab",
+      "district": "Ludhiana",
+      "station": "CPCB station name",
+      "measured_at": "2024-06-15",
+      "parameter": "pH",
+      "value": 7.2,
+      "unit": "pH",
+      "source": "CPCB/NWDP",
+      "source_url": "https://www.nwdp.nwic.gov.in/dataset/surface-water-quality-manual-chemical-parameters-cpcb"
+    }
+  ]
+}
+```
+
+The measurement endpoint supports `state`, `district`, `station`, `parameter`, `date_from`, `date_to`, `limit` (up to 5000), and `offset` filters. The import route uses the server's existing access middleware; keep it behind authentication when deployed.
 
 ---
 

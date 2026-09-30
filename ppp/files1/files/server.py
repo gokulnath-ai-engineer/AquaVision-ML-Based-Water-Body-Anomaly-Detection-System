@@ -306,8 +306,73 @@ async def list_tiles():
 
 @app.get("/api/geo/states")
 async def get_geo_states():
-    """Return only Punjab state (project is Punjab-locked)."""
-    return JSONResponse(["Punjab"])
+    """Return all states and union territories represented in the India database."""
+    from india_data import list_states
+    return JSONResponse(list_states())
+
+
+@app.get("/api/geo/districts")
+async def get_geo_districts(state: Optional[str] = None, refresh: bool = False):
+    """Get official India district names from the Government of India's BharatMap service."""
+    import asyncio
+    from india_data import districts
+    try:
+        rows = await asyncio.to_thread(districts, state, refresh)
+        return JSONResponse({"source": "Government of India BharatMap Service", "count": len(rows), "items": rows})
+    except Exception as exc:
+        return JSONResponse({"error": "District service unavailable", "detail": str(exc)}, status_code=502)
+
+
+@app.get("/api/measurements")
+async def get_india_measurements(
+    state: Optional[str] = None, district: Optional[str] = None,
+    station: Optional[str] = None, parameter: Optional[str] = None,
+    date_from: Optional[str] = None, date_to: Optional[str] = None,
+    limit: int = 500, offset: int = 0,
+):
+    """Query stored CPCB/NWDP station measurements with location/date filters."""
+    from india_data import get_measurements
+    if not 1 <= limit <= 5000 or offset < 0:
+        return JSONResponse({"error": "limit must be 1-5000 and offset must be non-negative"}, status_code=400)
+    return JSONResponse(get_measurements(state, district, station, parameter, date_from, date_to, limit, offset))
+
+
+@app.get("/api/measurements/collector-status")
+async def get_measurement_collector_status():
+    from india_data import COLLECTOR_STATUS
+    from india_data import get_measurements
+    return JSONResponse({**COLLECTOR_STATUS, "stored_records": get_measurements(limit=1)["total"]})
+
+
+@app.post("/api/measurements/collect")
+async def collect_india_measurements(state: Optional[str] = None):
+    """Start a CPCB/NWDP download now, optionally limited to a state/UT."""
+    import asyncio
+    from india_data import collect_nwdp_measurements
+    result = await asyncio.to_thread(collect_nwdp_measurements, state)
+    return JSONResponse(result, status_code=502 if result.get("status") == "error" else 200)
+
+
+@app.post("/api/measurements/import")
+async def import_india_measurements(request: Request):
+    """Import up to 1000 real measurement records as JSON into the local SQLite database."""
+    from india_data import save_measurements
+    try:
+        payload = await request.json()
+        records = payload if isinstance(payload, list) else payload.get("items", [])
+        if not isinstance(records, list) or not records or len(records) > 1000:
+            return JSONResponse({"error": "Send 1-1000 records as a JSON array or {items: [...]}"}, status_code=400)
+        saved = save_measurements(records)
+        return JSONResponse({"saved": saved, "database": "data/india_water_quality.sqlite3"}, status_code=201)
+    except (ValueError, KeyError) as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+
+
+@app.on_event("startup")
+async def start_india_measurement_collector():
+    """Automatically refresh the local measurements from NWDP once per day."""
+    from india_data import start_daily_collector
+    start_daily_collector()
 
 
 @app.get("/api/geo/cities/{state}")
