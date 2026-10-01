@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AquaVision Login</title>
+    <style>
+      :root {
+        --bg: #061b2d;
+        --panel: rgba(12, 29, 45, 0.95);
+        --panel-border: rgba(124, 211, 252, 0.2);
+        --primary: #49d0ff;
+        --primary-dark: #0ea5e9;
+        --muted: #a8bdd6;
+        --text: #edf6ff;
+        --danger: #ff6b6b;
+        --success: #34d399;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: Arial, Helvetica, sans-serif;
+        background: radial-gradient(circle at top, #113a5f 0%, var(--bg) 45%, #020d18 100%);
+        color: var(--text);
+      }
+
+      .login-box {
+        width: min(480px, 92vw);
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 18px;
+        padding: 30px 28px 24px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+      }
+
+      .logo {
+        font-size: 2rem;
+        margin-bottom: 8px;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 2rem;
+      }
+
+      .subtitle {
+        margin: 0 0 24px;
+        color: var(--muted);
+        font-size: 0.96rem;
+      }
+
+      .field {
+        margin-bottom: 16px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--muted);
+        font-weight: 600;
+        font-size: 0.9rem;
+      }
+
+      input {
+        width: 100%;
+        padding: 12px 14px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(15, 23, 42, 0.8);
+        color: var(--text);
+        font-size: 1rem;
+      }
+
+      button {
+        width: 100%;
+        border: none;
+        border-radius: 10px;
+        padding: 14px 16px;
+        background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        color: #02131d;
+        font-weight: 800;
+        cursor: pointer;
+        letter-spacing: 0.04em;
+      }
+
+      .status {
+        min-height: 24px;
+        margin-top: 14px;
+        font-size: 0.9rem;
+        color: var(--muted);
+      }
+
+      .status.error { color: var(--danger); }
+      .status.success { color: var(--success); }
+
+      .footnote {
+        margin-top: 18px;
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="login-box">
+      <div class="logo">🌊</div>
+      <h1>Aqua-Sentinel AI- Bharath Water Monitor</h1>
+      <p class="subtitle">Single-user authorized access to the water anomaly monitoring dashboard.</p>
+
+      <form id="loginForm">
+        <div class="field">
+          <label for="username">Username</label>
+          <input id="username" name="username" value="admin" required />
+        </div>
+
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" placeholder="Enter your password" required />
+        </div>
+
+        <button type="submit">Unlock Dashboard</button>
+      </form>
+
+      <div id="status" class="status" aria-live="polite"></div>
+      <div class="footnote">Only the registered browser fingerprint can open this application.</div>
+    </div>
+
+    <script>
+      function hashString(value) {
+        const bytes = new TextEncoder().encode(value);
+        return crypto.subtle.digest('SHA-256', bytes).then(buffer => {
+          return Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+        });
+      }
+
+      async function collectFingerprint() {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const text = 'AquaVision fingerprint ' + new Date().toISOString();
+        ctx.textBaseline = 'top';
+        ctx.font = '14px Arial';
+        ctx.fillText(text, 2, 2);
+
+        const fingerprint = {
+          ua: navigator.userAgent,
+          language: navigator.language,
+          platform: navigator.platform,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+          timezoneOffset: new Date().getTimezoneOffset(),
+          cpu: navigator.hardwareConcurrency || 0,
+          memory: navigator.deviceMemory || 0,
+          screen: `${screen.width}x${screen.height}x${screen.colorDepth}`,
+          colors: screen.colorDepth,
+          pixelDepth: screen.pixelDepth,
+          cookies: navigator.cookieEnabled,
+          online: navigator.onLine,
+          canvas: canvas.toDataURL(),
+          webgl: (() => {
+            try {
+              const gl = document.createElement('canvas').getContext('webgl');
+              if (!gl) return 'none';
+              const info = gl.getExtension('WEBGL_debug_renderer_info');
+              return gl.getParameter(gl.RENDERER) + '|' + gl.getParameter(gl.VENDOR) + '|' + (info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : '');
+            } catch (e) {
+              return 'unavailable';
+            }
+          })(),
+        };
+
+        const normalized = JSON.stringify(fingerprint, Object.keys(fingerprint).sort());
+        const hash = await hashString(normalized);
+        return { ...fingerprint, fingerprintHash: hash };
+      }
+
+      document.getElementById('loginForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const status = document.getElementById('status');
+        status.textContent = 'Generating fingerprint and verifying access...';
+        status.className = 'status';
+
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value;
+
+        try {
+          const fp = await collectFingerprint();
+          const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, fingerprint: fp })
+          });
+
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.message || 'Access denied');
+          }
+
+          status.textContent = 'Access granted. Opening dashboard...';
+          status.className = 'status success';
+          window.location.href = '/';
+        } catch (error) {
+          status.textContent = error.message || 'Access denied';
+          status.className = 'status error';
+        }
+      });
+    </script>
+  </body>
+</html>

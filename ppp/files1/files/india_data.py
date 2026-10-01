@@ -1,7 +1,8 @@
-"""India-wide geography and measured surface-water quality storage.
+"""India-wide geography and environmental measurement storage.
 
 Geographic boundaries come from the Government of India's BharatMap service.
-Measurements are real observations imported from CPCB/NWDP, never estimates.
+Water measurements are imported from CPCB/NWDP; weather observations are
+retrieved from Open-Meteo and stored with their source and location metadata.
 """
 
 import json
@@ -27,6 +28,8 @@ DISTRICT_API = (
 DISTRICT_CACHE = {"expires": 0, "items": []}
 COLLECTOR_STATUS = {"running": False, "last_run": None, "records": 0, "error": None}
 COLLECTOR_LOCK = threading.Lock()
+WEATHER_STATUS = {"last_run": None, "records": 0, "error": None}
+_DAILY_THREAD = None
 NWDP_DATASET_URL = "https://www.nwdp.nwic.gov.in/dataset/surface-water-quality-manual-chemical-parameters-cpcb"
 
 
@@ -173,15 +176,52 @@ def collect_nwdp_measurements(state=None):
         COLLECTOR_LOCK.release()
 
 
+def collect_weather(latitude=None, longitude=None, roi=None):
+    """Fetch and store a current Open-Meteo observation for a location."""
+    try:
+        from config import ROI as DEFAULT_ROI
+        from data_sources import get_open_meteo_weather
+        roi = roi or DEFAULT_ROI
+        latitude = float(latitude if latitude is not None else (float(roi["lat_min"]) + float(roi["lat_max"])) / 2)
+        longitude = float(longitude if longitude is not None else (float(roi["lon_min"]) + float(roi["lon_max"])) / 2)
+        weather = get_open_meteo_weather(latitude, longitude)
+        current, units = weather.get("current", {}), weather.get("units", {})
+        measured_at = current.get("time") or datetime.now(timezone.utc).isoformat()
+        values = {
+            "temperature_2m": current.get("temperature_2m"),
+            "relative_humidity_2m": current.get("relative_humidity_2m"),
+            "precipitation": current.get("precipitation"),
+            "wind_speed_10m": current.get("wind_speed_10m"),
+        }
+        records = [{
+            "state": roi.get("state", ""), "district": None,
+            "station": f"{roi.get('water_body', 'monitoring site')} weather",
+            "measured_at": measured_at, "parameter": name, "value": value,
+            "unit": units.get(name), "source": "Open-Meteo",
+            "source_url": "https://api.open-meteo.com/v1/forecast",
+            "metadata": {"latitude": latitude, "longitude": longitude,
+                         "timezone": weather.get("timezone")},
+        } for name, value in values.items() if value is not None]
+        count = save_measurements(records) if records else 0
+        WEATHER_STATUS.update(last_run=datetime.now(timezone.utc).isoformat(), records=count, error=None)
+        return {"status": "complete", "records_imported": count, "latitude": latitude, "longitude": longitude}
+    except Exception as exc:
+        WEATHER_STATUS.update(last_run=datetime.now(timezone.utc).isoformat(), error=str(exc))
+        return {"status": "error", "error": str(exc)}
+
+
 def _daily_collector():
     while True:
         collect_nwdp_measurements()
+        collect_weather()
         time.sleep(86400)
 
 
 def start_daily_collector():
-    if not COLLECTOR_STATUS["running"] and COLLECTOR_STATUS["last_run"] is None:
-        threading.Thread(target=_daily_collector, name="nwdp-daily-collector", daemon=True).start()
+    global _DAILY_THREAD
+    if _DAILY_THREAD is None or not _DAILY_THREAD.is_alive():
+        _DAILY_THREAD = threading.Thread(target=_daily_collector, name="environment-daily-collector", daemon=True)
+        _DAILY_THREAD.start()
 
 
 def list_states():
@@ -278,12 +318,15 @@ def save_measurements(records):
 
 
 def get_measurements(state=None, district=None, station=None, parameter=None,
-                     date_from=None, date_to=None, limit=500, offset=0):
+                     date_from=None, date_to=None, limit=500, offset=0, source=None):
     clauses, args = [], []
     for column, value in (("state", state), ("district", district), ("station", station), ("parameter", parameter)):
         if value:
             clauses.append(f"lower({column}) = lower(?)")
             args.append(value)
+    if source:
+        clauses.append("lower(source) = lower(?)")
+        args.append(source)
     if date_from:
         clauses.append("measured_at >= ?")
         args.append(date_from)

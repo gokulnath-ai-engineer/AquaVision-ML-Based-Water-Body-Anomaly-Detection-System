@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+venv/
+data/punjab_training/
+data/authorized_fingerprint.json
+data/*.sqlite3
+runs/
+logs/
+reports/

@@ -116,6 +116,20 @@ streamlit run dashboard.py          # Streamlit dashboard
 python server.py                    # FastAPI web dashboard (http://localhost:8000)
 ```
 
+## Deploy a free preview on Render
+
+The repository includes a root-level `render.yaml` Blueprint for a Docker
+web service in Render's Singapore region. Connect the GitHub repository to
+Render and deploy the Blueprint. Render will prompt for
+`AQUAVISION_ADMIN_PASSWORD`; use a unique password for the public preview.
+The deployment excludes the local Punjab training archive from the Docker
+build context.
+
+This free preview sleeps after 15 minutes without traffic and has ephemeral
+storage. Local SQLite records, generated reports, and collected observations
+can be lost when the service restarts or sleeps. Persistent collection needs
+a paid service with persistent storage or a managed database.
+
 ---
 
 ## Project Structure

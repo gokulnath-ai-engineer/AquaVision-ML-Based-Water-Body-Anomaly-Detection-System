@@ -53,7 +53,11 @@ ROI = {
 APP_ACCESS = {
     "enabled": True,
     "username": "admin",
-    "password": "AquaVision@123",
+    "password": (
+        os.environ.get("AQUAVISION_ADMIN_PASSWORD")
+        if os.environ.get("APP_ENV", "").casefold() == "production"
+        else os.environ.get("AQUAVISION_ADMIN_PASSWORD", "AquaVision@123")
+    ),
     "allowed_fingerprint": None,
     "session_cookie": "aquavision_user",
     "fingerprint_file": "data/authorized_fingerprint.json",

@@ -16,7 +16,8 @@ data/raw_geotiff/
 data/spectral_analysis/
 data/synthetic_ground_truth/
 ppp/files1/files/data/
-ppp/files1/files/static/
+!ppp/files1/files/static/
+!ppp/files1/files/static/**
 
 # Local editor settings
 .vscode/

@@ -189,6 +189,43 @@ def export_sentinel2_image(image, description: str, roi) -> None:
     return task
 
 
+def export_additional_datasets(roi):
+    """Export cloud-independent Sentinel-1 SAR and JRC water history layers."""
+    import ee
+
+    start, end = SENTINEL2["date_start"], SENTINEL2["date_end"]
+    sar = (ee.ImageCollection("COPERNICUS/S1_GRD")
+           .filterBounds(roi).filterDate(start, end)
+           .filter(ee.Filter.eq("instrumentMode", "IW"))
+           .filter(ee.Filter.listContains("transmitterReceiverPolarisation", "VV"))
+           .filter(ee.Filter.listContains("transmitterReceiverPolarisation", "VH")))
+    tasks = []
+    sar_count = sar.size().getInfo()
+    print(f"[INFO] Sentinel-1 IW scenes: {sar_count}")
+    if sar_count:
+        composite = sar.select(["VV", "VH"]).median().clip(roi)
+        task = ee.batch.Export.image.toDrive(
+            image=composite, description=f"AquaSentinel_S1_VV_VH_{start}_{end}",
+            folder="AquaSentinel_SAR", fileNamePrefix=f"AquaSentinel_S1_VV_VH_{start}_{end}",
+            scale=10, region=roi, fileFormat="GeoTIFF", maxPixels=1e13,
+        )
+        task.start()
+        tasks.append(task)
+
+    water = ee.Image("JRC/GSW1_4/GlobalSurfaceWater").select(
+        ["occurrence", "seasonality"]
+    ).clip(roi)
+    task = ee.batch.Export.image.toDrive(
+        image=water, description="AquaSentinel_JRC_SurfaceWater",
+        folder="AquaSentinel_WaterHistory", fileNamePrefix="AquaSentinel_JRC_SurfaceWater",
+        scale=30, region=roi, fileFormat="GeoTIFF", maxPixels=1e13,
+    )
+    task.start()
+    tasks.append(task)
+    print("[INFO] Started Sentinel-1 SAR and JRC Global Surface Water exports.")
+    return tasks
+
+
 # ──────────────────────────────────────────────
 # GEE production pipeline
 # ──────────────────────────────────────────────
@@ -279,11 +316,15 @@ def run_gee_pipeline() -> None:
         )
         tasks.append(median_task)
 
+    # Complement optical/thermal imagery with SAR and a historical water baseline.
+    tasks.extend(export_additional_datasets(roi))
+
     # ── Summary ──────────────────────────────────────
     print(f"\n[DONE] {len(tasks)} export task(s) submitted to Google Earth Engine.")
     print("       Monitor progress at: https://code.earthengine.google.com/tasks")
     print(f"       Landsat thermal   → Google Drive/{GEE['drive_folder']}/")
     print(f"       Sentinel-2 MSI    → Google Drive/{SENTINEL2['drive_folder']}/")
+    return tasks
 
 
 # ──────────────────────────────────────────────

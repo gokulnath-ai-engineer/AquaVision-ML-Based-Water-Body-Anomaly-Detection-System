@@ -39,7 +39,7 @@ from typing import Optional
 
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -48,6 +48,9 @@ from config import INFER, PREPROCESS, DASHBOARD, RIVER_ONLY_MODE
 
 APP_ROOT = Path(__file__).resolve().parent
 os.chdir(APP_ROOT)
+
+if os.environ.get("APP_ENV", "").casefold() == "production" and not config.APP_ACCESS.get("password"):
+    raise RuntimeError("Set AQUAVISION_ADMIN_PASSWORD for production deployments.")
 
 ROI = config.ROI
 
@@ -59,6 +62,8 @@ pipeline_status = {
     "error": None,
     "location": None,
 }
+all_sources_status = {"running": False, "started_at": None, "finished_at": None, "sources": {}}
+ALL_SOURCES_LOCK = threading.Lock()
 
 # ──────────────────────────────────────────────
 # App setup
@@ -151,6 +156,13 @@ async def serve_login_page():
     if not login_path.exists():
         return HTMLResponse("<h1>Access required</h1><p>Please create static/login.html.</p>", status_code=200)
     return HTMLResponse(content=login_path.read_text(encoding="utf-8"))
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    # Browsers request this automatically; an empty successful response avoids
+    # a noisy 404 when the project does not ship a binary .ico file.
+    return Response(status_code=204)
 
 
 @app.post("/api/auth/login")
@@ -270,6 +282,76 @@ async def get_stats():
     return JSONResponse(stats)
 
 
+@app.get("/api/datasets")
+async def list_supported_datasets():
+    """List imagery and water-quality datasets supported by the platform."""
+    from data_sources import DATASETS
+    return JSONResponse({"count": len(DATASETS), "items": DATASETS})
+
+
+def _collect_all_sources_worker():
+    from datetime import datetime, timezone
+    def stamp():
+        return datetime.now(timezone.utc).isoformat()
+
+    try:
+        all_sources_status["started_at"] = stamp()
+        all_sources_status["finished_at"] = None
+        all_sources_status["sources"] = {}
+        from india_data import collect_nwdp_measurements, collect_weather
+        for source, collector in (
+            ("CPCB/NWDP", collect_nwdp_measurements),
+            ("Open-Meteo", collect_weather),
+        ):
+            try:
+                all_sources_status["sources"][source] = collector()
+            except Exception as exc:
+                all_sources_status["sources"][source] = {"status": "error", "error": str(exc)}
+        try:
+            from module1_gee_acquisition import run_gee_pipeline
+            tasks = run_gee_pipeline()
+            all_sources_status["sources"]["Google Earth Engine"] = {
+                "status": "submitted", "task_count": len(tasks),
+                "datasets": ["Landsat 8/9", "Sentinel-2", "Sentinel-1", "JRC Global Surface Water"],
+                "destination": "Google Drive",
+            }
+        except Exception as exc:
+            all_sources_status["sources"]["Google Earth Engine"] = {"status": "error", "error": str(exc)}
+        all_sources_status["finished_at"] = stamp()
+    finally:
+        all_sources_status["running"] = False
+        ALL_SOURCES_LOCK.release()
+
+
+@app.post("/api/collect-all-sources")
+async def collect_all_sources():
+    """Collect ground/weather observations and submit all configured satellite exports."""
+    if not ALL_SOURCES_LOCK.acquire(blocking=False):
+        return JSONResponse({"error": "All-source collection is already running", "status": all_sources_status}, status_code=409)
+    all_sources_status["running"] = True
+    threading.Thread(target=_collect_all_sources_worker, name="all-source-collector", daemon=True).start()
+    return JSONResponse({"message": "All-source collection started", "status": all_sources_status}, status_code=202)
+
+
+@app.get("/api/collect-all-sources/status")
+async def get_all_sources_status():
+    return JSONResponse(all_sources_status)
+
+
+@app.get("/api/environment/weather")
+async def get_environment_weather(latitude: float, longitude: float):
+    """Get current weather context for a location from Open-Meteo."""
+    if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+        return JSONResponse({"error": "latitude must be -90..90 and longitude -180..180"}, status_code=400)
+    import asyncio
+    from data_sources import get_open_meteo_weather
+    try:
+        result = await asyncio.to_thread(get_open_meteo_weather, latitude, longitude)
+        return JSONResponse(result)
+    except Exception:
+        return JSONResponse({"error": "Open-Meteo weather service is unavailable"}, status_code=502)
+
+
 @app.get("/api/heatmaps")
 async def list_heatmaps():
     if not HEATMAP_DIR.exists():
@@ -328,20 +410,33 @@ async def get_india_measurements(
     state: Optional[str] = None, district: Optional[str] = None,
     station: Optional[str] = None, parameter: Optional[str] = None,
     date_from: Optional[str] = None, date_to: Optional[str] = None,
-    limit: int = 500, offset: int = 0,
+    limit: int = 500, offset: int = 0, source: Optional[str] = None,
 ):
     """Query stored CPCB/NWDP station measurements with location/date filters."""
     from india_data import get_measurements
     if not 1 <= limit <= 5000 or offset < 0:
         return JSONResponse({"error": "limit must be 1-5000 and offset must be non-negative"}, status_code=400)
-    return JSONResponse(get_measurements(state, district, station, parameter, date_from, date_to, limit, offset))
+    return JSONResponse(get_measurements(state, district, station, parameter, date_from, date_to, limit, offset, source))
 
 
 @app.get("/api/measurements/collector-status")
 async def get_measurement_collector_status():
-    from india_data import COLLECTOR_STATUS
+    from india_data import COLLECTOR_STATUS, WEATHER_STATUS
     from india_data import get_measurements
-    return JSONResponse({**COLLECTOR_STATUS, "stored_records": get_measurements(limit=1)["total"]})
+    return JSONResponse({
+        "cpcb_nwdp": COLLECTOR_STATUS,
+        "open_meteo": WEATHER_STATUS,
+        "stored_records": get_measurements(limit=1)["total"],
+    })
+
+
+@app.get("/api/environment/weather/history")
+async def get_weather_history(limit: int = 100, offset: int = 0):
+    """Return automatically collected Open-Meteo observations."""
+    from india_data import get_measurements
+    if not 1 <= limit <= 5000 or offset < 0:
+        return JSONResponse({"error": "limit must be 1-5000 and offset must be non-negative"}, status_code=400)
+    return JSONResponse(get_measurements(source="Open-Meteo", limit=limit, offset=offset))
 
 
 @app.post("/api/measurements/collect")

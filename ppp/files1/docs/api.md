@@ -27,6 +27,51 @@ python run_pipeline.py [OPTIONS]
 - `--city NAME` - City name
 - `--water-body NAME` - Water body name
 
+## Dataset and environmental data APIs
+
+The FastAPI server exposes a catalogue of the imagery and in-situ datasets
+that the project can use:
+
+```http
+GET /api/datasets
+```
+
+The catalogue includes Sentinel-2 surface reflectance, Landsat 8/9 Level-2,
+Sentinel-1 GRD, JRC Global Surface Water, and CPCB/NWDP station measurements.
+Earth Engine imagery exports require Earth Engine authentication. Sentinel-1
+and JRC exports are started with the existing Module 1 GEE acquisition run.
+CPCB/NWDP measurements continue to be queried through `/api/measurements`.
+
+Current weather context is available from Open-Meteo (no API key required):
+
+```http
+GET /api/environment/weather?latitude=30.9&longitude=75.8
+```
+
+The response contains the provider, returned coordinates, UTC timezone,
+current temperature, humidity, precipitation, wind speed, and their units.
+The external service must be reachable by the server.
+
+On server startup, a background collector also stores Open-Meteo observations
+for the configured ROI and refreshes them daily. CPCB/NWDP collection runs on
+the same daily schedule. Read stored weather using
+`GET /api/environment/weather/history`; check both collectors at
+`GET /api/measurements/collector-status`. General measurement queries accept
+`source=Open-Meteo` or `source=CPCB/NWDP`.
+
+To start a one-time collection across the listed sources:
+
+```http
+POST /api/collect-all-sources
+GET  /api/collect-all-sources/status
+```
+
+This refreshes CPCB/NWDP and Open-Meteo observations and submits Landsat,
+Sentinel-2, Sentinel-1, and JRC Global Surface Water exports to Google Earth
+Engine. Imagery exports require a configured Earth Engine account and are
+submitted as asynchronous tasks to Google Drive; use the status endpoint to
+check submission results.
+
 ---
 
 ## Module 1: Data Acquisition

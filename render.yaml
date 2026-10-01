@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: aquavision-water-monitor
+    runtime: docker
+    plan: free
+    region: singapore
+    rootDir: ppp/files1/files
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: AQUAVISION_ADMIN_PASSWORD
+        sync: false
